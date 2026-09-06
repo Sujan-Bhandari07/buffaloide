@@ -17,6 +17,7 @@ export interface ProjectTreeNode {
   _id: string;
   name: string;
   type: "folder" | "file";
+  content?: string;
   parentid?: string;
   children: ProjectTreeNode[];
 }

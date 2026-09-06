@@ -13,10 +13,11 @@ interface IdeState {
   explorerVisible: boolean;
   assistantVisible: boolean;
 
-    activeFileName: string | null;
   mainView: MainView;
   isExplorerExpanded: boolean;
   activeFileId: string | null;
+  activeFileName: string | null;
+  activeFileContent: string;
   terminalOpen: boolean;
   chatMessages: ChatMessage[];
   chatDraft: string;
@@ -30,10 +31,11 @@ const initialState: IdeState = {
   mainView: "editor",
   isExplorerExpanded: true,
   activeFileId: null,
+  activeFileName: null,
+  activeFileContent: "",
   terminalOpen: false,
   chatMessages: [],
 
-     activeFileName: null,
   chatDraft: "",
   isAssistantThinking: false,
 };
@@ -73,9 +75,18 @@ const ideSlice = createSlice({
 
 
     setActiveFile: (state, action: PayloadAction<{ id: string; name: string }>) => {
-  state.activeFileId = action.payload.id;
-  state.activeFileName = action.payload.name;
-},
+      state.activeFileId = action.payload.id;
+      state.activeFileName = action.payload.name;
+    },
+    openFile: (state, action: PayloadAction<{ id: string; name: string; content?: string }>) => {
+      state.activeFileId = action.payload.id;
+      state.activeFileName = action.payload.name;
+      state.activeFileContent = action.payload.content ?? "";
+      state.mainView = "editor";
+    },
+    updateActiveFileContent(state, action: PayloadAction<string>) {
+      state.activeFileContent = action.payload;
+    },
     receiveAssistantMessage: {
       reducer(state, action: PayloadAction<ChatMessage>) {
         state.chatMessages.push(action.payload);
@@ -97,6 +108,9 @@ export const {
   setChatDraft,
   sendChatMessage,
   receiveAssistantMessage,
+  setActiveFile,
+  openFile,
+  updateActiveFileContent,
 } = ideSlice.actions;
 
 export default ideSlice.reducer

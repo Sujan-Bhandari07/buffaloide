@@ -1,5 +1,9 @@
 import React, { useRef } from "react";
 import { useParams } from "react-router-dom";
+import Editor from "@monaco-editor/react";
+import { Terminal } from "@xterm/xterm";
+import { FitAddon } from "@xterm/addon-fit";
+import "@xterm/xterm/css/xterm.css";
 
 import {
   Files,
@@ -34,7 +38,7 @@ import {
   Braces,
 } from "lucide-react";
 import { useAppDispatch, useAppSelector } from "../utils/Hooks";
-import { receiveAssistantMessage, sendChatMessage, setChatDraft, setMainView, toggleAssistantPanel, toggleExplorer, toggleExplorerPanel, toggleTerminal } from "../store/Projectslice";
+import { receiveAssistantMessage, openFile, sendChatMessage, setChatDraft, setMainView, toggleAssistantPanel, toggleExplorer, toggleExplorerPanel, toggleTerminal, updateActiveFileContent } from "../store/Projectslice";
 import { type ProjectTreeNode, useCreatefileMutation, useCreatefolderMutation, useGettreeQuery } from "../store/Projectapi";
 
 /* ============================================================================
@@ -46,7 +50,6 @@ import { type ProjectTreeNode, useCreatefileMutation, useCreatefolderMutation, u
  * COMPONENTS
  * ==========================================================================*/
 type SidebarView = "explorer" | "assistant" | "search";
-type MainView = "editor" | "preview";
 
 function IconRail() {
   const dispatch = useAppDispatch();
@@ -97,7 +100,10 @@ function IconRail() {
 
 function TopBar({ projectName }: { projectName?: string }) {
   const dispatch = useAppDispatch();
-  const defaultProjectName = useAppSelector((s) => s.ide.projectName);
+  const { defaultProjectName, mainView } = useAppSelector((s) => ({
+    defaultProjectName: s.ide.projectName,
+    mainView: s.ide.mainView,
+  }));
 
   return (
     <div className="flex h-14 items-center justify-between border-b border-white/5 bg-[#0a0a0d] px-4">
@@ -127,10 +133,18 @@ function TopBar({ projectName }: { projectName?: string }) {
           <TerminalSquare size={17} strokeWidth={1.8} />
         </button>
         <button
-          title="Source"
-          className="flex h-8 w-8 items-center justify-center rounded-md text-[#8a8a96] hover:bg-white/5 hover:text-white"
+          onClick={() => dispatch(setMainView("editor"))}
+          title="Editor"
+          className={`flex h-8 w-8 items-center justify-center rounded-md ${mainView === "editor" ? "bg-white/10 text-white" : "text-[#8a8a96] hover:bg-white/5 hover:text-white"}`}
         >
           <Code2 size={17} strokeWidth={1.8} />
+        </button>
+        <button
+          onClick={() => dispatch(setMainView("preview"))}
+          title="Preview"
+          className={`flex h-8 w-8 items-center justify-center rounded-md ${mainView === "preview" ? "bg-white/10 text-white" : "text-[#8a8a96] hover:bg-white/5 hover:text-white"}`}
+        >
+          <Eye size={17} strokeWidth={1.8} />
         </button>
         <div className="h-8 w-8 overflow-hidden rounded-full bg-gradient-to-br from-orange-300 to-rose-400 ring-1 ring-white/10" />
       </div>
@@ -163,7 +177,7 @@ function getNodeAppearance(node: ProjectTreeNode) {
   return { icon: FileCode2, color: "text-[#8a8a96]" };
 }
 
-function TreeNode({ node, level = 0, selectedId, onSelectFolder, onOpenContextMenu }: { node: ProjectTreeNode; level?: number; selectedId: string | null; onSelectFolder: (id: string) => void; onOpenContextMenu: (event: React.MouseEvent, parentId: string) => void }) {
+function TreeNode({ node, level = 0, selectedId, onSelectFolder, onOpenFile, onOpenContextMenu }: { node: ProjectTreeNode; level?: number; selectedId: string | null; onSelectFolder: (id: string) => void; onOpenFile: (node: ProjectTreeNode) => void; onOpenContextMenu: (event: React.MouseEvent, parentId: string) => void }) {
   const [expanded, setExpanded] = React.useState(true);
   const isFolder = node.type === "folder";
   const { icon: NodeIcon, color } = getNodeAppearance(node);
@@ -176,6 +190,8 @@ function TreeNode({ node, level = 0, selectedId, onSelectFolder, onOpenContextMe
           if (isFolder) {
             setExpanded((value) => !value);
             onSelectFolder(node._id);
+          } else {
+            onOpenFile(node);
           }
         }}
         onContextMenu={(event) => {
@@ -195,13 +211,13 @@ function TreeNode({ node, level = 0, selectedId, onSelectFolder, onOpenContextMe
         <span className="truncate">{node.name}</span>
       </button>
       {isFolder && expanded && node.children.map((child) => (
-        <TreeNode key={child._id} node={child} level={level + 1} selectedId={selectedId} onSelectFolder={onSelectFolder} onOpenContextMenu={onOpenContextMenu} />
+        <TreeNode key={child._id} node={child} level={level + 1} selectedId={selectedId} onSelectFolder={onSelectFolder} onOpenFile={onOpenFile} onOpenContextMenu={onOpenContextMenu} />
       ))}
     </div>
   );
 }
 
-function Explorer({ tree, isLoading, isError, projectName, projectId, onRefresh }: { tree: ProjectTreeNode[]; isLoading: boolean; isError: boolean; projectName?: string; projectId: string; onRefresh: () => void }) {
+function Explorer({ tree, isLoading, isError, projectName, projectId, onRefresh, onOpenFile }: { tree: ProjectTreeNode[]; isLoading: boolean; isError: boolean; projectName?: string; projectId: string; onRefresh: () => void; onOpenFile: (node: ProjectTreeNode) => void }) {
   const dispatch = useAppDispatch();
   const [selectedParentId, setSelectedParentId] = React.useState<string | null>(null);
   const [creating, setCreating] = React.useState<"file" | "folder" | null>(null);
@@ -319,7 +335,7 @@ function Explorer({ tree, isLoading, isError, projectName, projectId, onRefresh 
           <div className="py-6 text-center text-xs text-[#8a8a96]/70">No files yet.</div>
         )}
         {isExplorerExpanded && !isLoading && !isError && tree.map((node) => (
-          <TreeNode key={node._id} node={node} selectedId={selectedParentId} onSelectFolder={setSelectedParentId} onOpenContextMenu={openContextMenu} />
+          <TreeNode key={node._id} node={node} selectedId={selectedParentId} onSelectFolder={setSelectedParentId} onOpenFile={onOpenFile} onOpenContextMenu={openContextMenu} />
         ))}
       </div>
 
@@ -343,46 +359,102 @@ function Explorer({ tree, isLoading, isError, projectName, projectId, onRefresh 
   );
 }
 
+function getEditorLanguage(fileName: string | null) {
+  const extension = fileName?.split(".").pop()?.toLowerCase();
+  const languages: Record<string, string> = {
+    css: "css",
+    html: "html",
+    js: "javascript",
+    jsx: "javascript",
+    json: "json",
+    md: "markdown",
+    py: "python",
+    scss: "scss",
+    ts: "typescript",
+    tsx: "typescript",
+  };
+  return languages[extension ?? ""] ?? "plaintext";
+}
+
+function TerminalPanel() {
+  const terminalRef = useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    if (!terminalRef.current) return;
+
+    const terminal = new Terminal({
+      convertEol: true,
+      cursorBlink: true,
+      fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+      fontSize: 12,
+      theme: { background: "#0e0e12", foreground: "#d4d4d8", cursor: "#8b7cf8" },
+    });
+    const fitAddon = new FitAddon();
+    terminal.loadAddon(fitAddon);
+    terminal.open(terminalRef.current);
+    fitAddon.fit();
+    terminal.writeln("Buffalo terminal");
+    terminal.write("$ ");
+
+    const input = terminal.onData((data) => {
+      if (data === "\r") {
+        terminal.write("\r\n$ ");
+      } else if (data === "\u007f") {
+        terminal.write("\b \b");
+      } else {
+        terminal.write(data);
+      }
+    });
+    const handleResize = () => fitAddon.fit();
+    window.addEventListener("resize", handleResize);
+
+    return () => {
+      input.dispose();
+      window.removeEventListener("resize", handleResize);
+      terminal.dispose();
+    };
+  }, []);
+
+  return <div ref={terminalRef} className="min-h-0 flex-1 overflow-hidden" />;
+}
+
 function EditorArea() {
   const dispatch = useAppDispatch();
-  const { mainView, terminalOpen, activeFileId } = useAppSelector((s) => ({
+  const { mainView, terminalOpen, activeFileId, activeFileName, activeFileContent } = useAppSelector((s) => ({
     mainView: s.ide.mainView,
     terminalOpen: s.ide.terminalOpen,
     activeFileId: s.ide.activeFileId,
+    activeFileName: s.ide.activeFileName,
+    activeFileContent: s.ide.activeFileContent,
   }));
 
-  const tabs: { id: MainView; label: string; icon: typeof Code2 }[] = [
-    { id: "editor", label: "Editor", icon: Code2 },
-    { id: "preview", label: "Preview", icon: Eye },
-  ];
-
   return (
-    <div className="relative flex flex-1 flex-col bg-black">
-      <div className="flex items-center justify-center border-b border-white/5 py-3">
-        <div className="flex items-center gap-1 rounded-lg bg-[#17171d] p-1">
-          {tabs.map(({ id, label, icon: Icon }) => {
-            const active = mainView === id;
-            return (
-              <button
-                key={id}
-                onClick={() => dispatch(setMainView(id))}
-                className={`flex items-center gap-1.5 rounded-md px-3.5 py-1.5 text-sm font-medium transition-colors ${
-                  active
-                    ? "bg-[#2c2c36] text-white shadow-[0_0_0_1px_rgba(255,255,255,0.04)]"
-                    : "text-[#8a8a96] hover:text-white"
-                }`}
-              >
-                <Icon size={14.5} strokeWidth={2} />
-                {label}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      <div className="flex flex-1 items-center justify-center">
-        {activeFileId ? (
-          <div className="p-6 text-sm text-white/70">Editing {activeFileId}</div>
+    <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden bg-black">
+      <div className="flex min-h-0 min-w-0 flex-1 items-center justify-center overflow-hidden">
+        {activeFileId && mainView === "editor" ? (
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col self-stretch overflow-hidden">
+            <div className="flex h-9 items-center border-b border-white/5 bg-[#0e0e12] px-3 text-xs text-white/80">
+              <div className="flex h-full items-center gap-2 border-r border-white/10 pr-4">
+                <FileCode2 size={13} className="text-[#8a8a96]" />
+                <span>{activeFileName}</span>
+              </div>
+            </div>
+            <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
+              <Editor
+                height="100%"
+                theme="vs-dark"
+                language={getEditorLanguage(activeFileName)}
+                path={activeFileName ?? activeFileId}
+                value={activeFileContent}
+                onChange={(value) => dispatch(updateActiveFileContent(value ?? ""))}
+                options={{ automaticLayout: true, minimap: { enabled: false }, fontSize: 14, padding: { top: 12 } }}
+              />
+            </div>
+          </div>
+        ) : activeFileId && mainView === "preview" ? (
+          <div className="flex flex-1 items-center justify-center text-sm text-white/60">
+            Preview for {activeFileName}
+          </div>
         ) : (
           <div className="flex flex-col items-center gap-3 text-center">
             <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[#17171d]/70 ring-1 ring-white/5">
@@ -407,18 +479,14 @@ function EditorArea() {
       )}
 
       {terminalOpen && (
-        <div className="h-44 border-t border-white/5 bg-[#0e0e12] p-3 font-mono text-xs text-white/70">
+        <div className="flex h-44 flex-col border-t border-white/5 bg-[#0e0e12] p-3 font-mono text-xs text-white/70">
           <div className="flex items-center justify-between text-[#8a8a96]">
             <span>TERMINAL</span>
             <button onClick={() => dispatch(toggleTerminal())} className="hover:text-white">
               Hide
             </button>
           </div>
-          <div className="mt-2 flex items-center gap-1">
-            <span className="text-[#8b7cf8]">➜</span>
-            <span className="text-white/60">calculator</span>
-            <span className="animate-pulse">▍</span>
-          </div>
+          <TerminalPanel />
         </div>
       )}
     </div>
@@ -451,12 +519,12 @@ function ChatPanel() {
   };
 
   return (
-    <div className="flex w-[380px] flex-col border-l border-white/5 bg-[#0e0e12]">
+    <div className="flex h-full min-h-0 w-[360px] min-w-[360px] shrink-0 flex-none flex-col overflow-hidden border-l border-white/5 bg-[#0e0e12]">
       <div className="border-b border-white/5 px-4 py-4">
         <h2 className="text-[15px] font-semibold text-white">Buffalo AI Chat</h2>
       </div>
 
-      <div className="flex flex-1 flex-col overflow-y-auto px-4">
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4">
         {chatMessages.length === 0 ? (
           <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center">
             <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-[#7c6cf6]/25 to-[#4a3f8f]/25 ring-1 ring-white/5">
@@ -560,7 +628,7 @@ function StatusBar() {
   );
 }
 
-function IdeLayout({ tree, isLoading, isError, projectName, projectId, onRefresh }: { tree: ProjectTreeNode[]; isLoading: boolean; isError: boolean; projectName?: string; projectId: string; onRefresh: () => void }) {
+function IdeLayout({ tree, isLoading, isError, projectName, projectId, onRefresh, onOpenFile }: { tree: ProjectTreeNode[]; isLoading: boolean; isError: boolean; projectName?: string; projectId: string; onRefresh: () => void; onOpenFile: (node: ProjectTreeNode) => void }) {
   const { explorerVisible, assistantVisible } = useAppSelector((s) => ({
     explorerVisible: s.ide.explorerVisible,
     assistantVisible: s.ide.assistantVisible,
@@ -568,9 +636,9 @@ function IdeLayout({ tree, isLoading, isError, projectName, projectId, onRefresh
   return (
     <div className="flex h-screen w-screen flex-col bg-[#0a0a0d] font-sans text-white">
       <TopBar projectName={projectName} />
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
         <IconRail />
-        {explorerVisible && <Explorer tree={tree} isLoading={isLoading} isError={isError} projectName={projectName} projectId={projectId} onRefresh={onRefresh} />}
+        {explorerVisible && <Explorer tree={tree} isLoading={isLoading} isError={isError} projectName={projectName} projectId={projectId} onRefresh={onRefresh} onOpenFile={onOpenFile} />}
         <EditorArea />
         {assistantVisible && <ChatPanel />}
       </div>
@@ -584,8 +652,9 @@ function IdeLayout({ tree, isLoading, isError, projectName, projectId, onRefresh
  * Drop this component anywhere in your existing app.
  * ==========================================================================*/
 export default function Projectp() {
+  const dispatch = useAppDispatch();
   const { id } = useParams<{ id: string }>();
   const { data, isLoading, isError, refetch } = useGettreeQuery(id ?? "", { skip: !id });
 
-  return <IdeLayout tree={data?.tree ?? []} isLoading={isLoading} isError={isError || !id} projectName={data?.project.name} projectId={id ?? ""} onRefresh={refetch} />;
+  return <IdeLayout tree={data?.tree ?? []} isLoading={isLoading} isError={isError || !id} projectName={data?.project.name} projectId={id ?? ""} onRefresh={refetch} onOpenFile={(node) => dispatch(openFile({ id: node._id, name: node.name, content: node.content }))} />;
 }
