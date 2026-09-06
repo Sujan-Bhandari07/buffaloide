@@ -2,6 +2,7 @@ import { configureStore, combineReducers } from "@reduxjs/toolkit";
 import  userapi  from "./Userapi";
 import   projectApi   from "./Projectapi";
 import Userreducer from "./Userslice";
+import ideslice from"./Projectslice"
 
 import {
   persistReducer,
@@ -33,6 +34,7 @@ const rootReducer = combineReducers({
   [userapi.reducerPath]: userapi.reducer,
   [projectApi.reducerPath]: projectApi.reducer,
   user: persistedUserReducer,
+  ide:ideslice,
 });
 
 export const store = configureStore({

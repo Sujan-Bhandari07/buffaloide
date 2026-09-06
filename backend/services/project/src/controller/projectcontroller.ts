@@ -57,4 +57,6 @@ const deleteproject=tryCatch(async(req , res)=>{
     return success(res,"Project delete successfully")
 })
 
+
+
 export{togglestar,createproject,getallproject,deleteproject}

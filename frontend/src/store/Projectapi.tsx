@@ -13,6 +13,23 @@ interface ApiResponse<T> {
   payload?: T;
 }
 
+export interface ProjectTreeNode {
+  _id: string;
+  name: string;
+  type: "folder" | "file";
+  parentid?: string;
+  children: ProjectTreeNode[];
+}
+
+export interface ProjectTreeResponse {
+  success: boolean;
+  project: {
+    _id: string;
+    name: string;
+  };
+  tree: ProjectTreeNode[];
+}
+
 
 export const projectApi = createApi({
   reducerPath: 'projectApi',
@@ -43,12 +60,13 @@ deleteproject: builder.mutation({
     }),
 
 
-    gettree: builder.query({
+     gettree: builder.query<ProjectTreeResponse, string>({
       query: (data) => ({
         url: `api/v1/project/gettree/${data}`,
         method: "GET",
 
       }),
+      providesTags: ['Projects'],
 
 
     }),
@@ -66,23 +84,25 @@ deleteproject: builder.mutation({
     }),
 
 
-    createfolder: builder.mutation({
+    createfolder: builder.mutation<void, { name: string; projectid: string; parentid?: string }>({
       query: (data) => ({
         url: "api/v1/project/createfolder",
         method: "POST",
         body: data,
       }),
+      invalidatesTags: ['Projects'],
 
 
     }),
 
 
-    createfile: builder.mutation({
+    createfile: builder.mutation<void, { name: string; projectid: string; parentid?: string }>({
       query: (data) => ({
         url: "api/v1/project/createfile",
         method: "POST",
         body: data,
       }),
+      invalidatesTags: ['Projects'],
 
 
     }),

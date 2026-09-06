@@ -19,7 +19,7 @@ const App = () => {
         {/* Protected routes */}
         <Route element={<Private/>}>
           <Route path="/" element={<Home />} />
-          <Route path="/project:id" element={<Projectp />} />
+          <Route path="/project/:id" element={<Projectp/>} />
         </Route>
       </Route>
     </Routes>

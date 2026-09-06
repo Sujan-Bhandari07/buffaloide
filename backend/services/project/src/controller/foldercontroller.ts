@@ -102,7 +102,7 @@ const gettree = tryCatch(async (req, res) => {
     }
 
     // fetch everything belonging to this project in one shot
-    const items = await Folder.find({ id }).lean();
+    const items = await Folder.find({ projectid: id }).lean();
 
     // map each item by its id, and add a children array
     const map = new Map<string, any>();
