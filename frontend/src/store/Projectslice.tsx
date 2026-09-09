@@ -59,6 +59,15 @@ const ideSlice = createSlice({
     toggleTerminal(state) {
       state.terminalOpen = !state.terminalOpen;
     },
+    resetProjectWorkspace(state) {
+      state.activeFileId = null;
+      state.activeFileName = null;
+      state.activeFileContent = "";
+      state.mainView = "editor";
+      state.chatMessages = [];
+      state.chatDraft = "";
+      state.isAssistantThinking = false;
+    },
     setChatDraft(state, action: PayloadAction<string>) {
       state.chatDraft = action.payload;
     },
@@ -105,6 +114,7 @@ export const {
   setMainView,
   toggleExplorer,
   toggleTerminal,
+  resetProjectWorkspace,
   setChatDraft,
   sendChatMessage,
   receiveAssistantMessage,

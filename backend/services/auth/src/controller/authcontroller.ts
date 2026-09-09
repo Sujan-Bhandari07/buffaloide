@@ -49,8 +49,12 @@ const login = tryCatch(async (req, res) => {
 });
 
 const logout=tryCatch(async(req ,res)=>{
-const token =req.cookies.token
-  await redis.del(`token-${token}`)
+const token = req.headers.cookie
+  ?.split(";")
+  .map((part) => part.trim())
+  .find((part) => part.startsWith("token="))
+  ?.slice("token=".length)
+  if (token) await redis.del(`token-${token}`)
   res.clearCookie("token")
   return success(res,"Logout successfull")
 })

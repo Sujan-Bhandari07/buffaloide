@@ -114,6 +114,7 @@ deleteproject: builder.mutation({
         method: "POST",
         body: data,
       }),
+        invalidatesTags: ['Projects'],
 
 
     }),
@@ -129,12 +130,21 @@ deleteproject: builder.mutation({
 
     }),
 
+    generateProject: builder.mutation<{ success: boolean; message: string; payload?: { projectId: string; projectName: string; files: string[] } }, { prompt: string; projectId?: string }>({
+      query: (data) => ({
+        url: "api/v1/ai/generate",
+        method: "POST",
+        body: data,
+      }),
+      invalidatesTags: ['Projects'],
+    }),
+
 
 
     //
   }),
 })
 
-export const { useCreateprojectMutation,useDeleteprojectMutation,useCreatefileMutation,useCreatefolderMutation,useDeletefolderMutation,useGettreeQuery,useTogglestarMutation,useGetallprojectQuery} = projectApi
+export const { useCreateprojectMutation,useDeleteprojectMutation,useCreatefileMutation,useCreatefolderMutation,useDeletefolderMutation,useGettreeQuery,useTogglestarMutation,useGetallprojectQuery,useGenerateProjectMutation} = projectApi
 
 export default projectApi

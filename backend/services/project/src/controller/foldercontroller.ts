@@ -72,21 +72,43 @@ return err(res,"Something went wrong")
 const deletefolder=tryCatch(async(req , res)=>{
 
     const{folderid,projectid}=req.body
-    if(!folderid){
-        return err(res,"Pls provide folder id")
+    const owner=req.headers["id"]
+    if(!folderid || !projectid){
+        return err(res,"Please provide folder and project id")
     }
-    const deleted=await Folder.findByIdAndDelete(folderid)
+    if(!owner){
+        return err(res,"Not authenticated")
+    }
+    const project=await Project.findOne({_id:projectid,owner:owner.toString()})
+    if(!project){
+        return err(res,"Project not found")
+    }
+    const deleted=await Folder.findOne({_id:folderid,projectid})
     if(!deleted){
-return err(res,"something went wrong")
+        return err(res,"File or folder not found")
     }
 
-    const del=await Project.findById(projectid)
-    if(del){
-        del.folders=del.folders.filter(i=>i !== folderid)
-        await del.save()
-
+    const descendants = deleted.type === "folder"
+        ? await Folder.find({projectid}).select("_id parentid").lean()
+        : []
+    const ids = new Set<string>([deleted._id.toString()])
+    if (deleted.type === "folder") {
+        let found = true
+        while (found) {
+            found = false
+            for (const item of descendants) {
+                if (item.parentid && ids.has(item.parentid.toString()) && !ids.has(item._id.toString())) {
+                    ids.add(item._id.toString())
+                    found = true
+                }
+            }
+        }
     }
-    return success(res,"Deleted folder successfully")
+    await Folder.deleteMany({_id:{$in:Array.from(ids)},projectid})
+
+    project.folders=project.folders.filter(i => !ids.has(i.toString()))
+    await project.save()
+    return success(res,deleted.type === "folder" ? "Folder deleted successfully" : "File deleted successfully")
 })
 
 

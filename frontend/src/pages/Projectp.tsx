@@ -1,5 +1,5 @@
 import React, { useRef } from "react";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import Editor from "@monaco-editor/react";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
@@ -38,8 +38,8 @@ import {
   Braces,
 } from "lucide-react";
 import { useAppDispatch, useAppSelector } from "../utils/Hooks";
-import { receiveAssistantMessage, openFile, sendChatMessage, setChatDraft, setMainView, toggleAssistantPanel, toggleExplorer, toggleExplorerPanel, toggleTerminal, updateActiveFileContent } from "../store/Projectslice";
-import { type ProjectTreeNode, useCreatefileMutation, useCreatefolderMutation, useGettreeQuery } from "../store/Projectapi";
+import { receiveAssistantMessage, openFile, resetProjectWorkspace, sendChatMessage, setChatDraft, setMainView, toggleAssistantPanel, toggleExplorer, toggleExplorerPanel, toggleTerminal, updateActiveFileContent } from "../store/Projectslice";
+import { type ProjectTreeNode, useCreatefileMutation, useCreatefolderMutation, useDeletefolderMutation, useGenerateProjectMutation, useGettreeQuery } from "../store/Projectapi";
 
 /* ============================================================================
  * STATE — RTK slice (single source of truth, no prop drilling)
@@ -100,6 +100,7 @@ function IconRail() {
 
 function TopBar({ projectName }: { projectName?: string }) {
   const dispatch = useAppDispatch();
+  const navigate = useNavigate();
   const { defaultProjectName, mainView } = useAppSelector((s) => ({
     defaultProjectName: s.ide.projectName,
     mainView: s.ide.mainView,
@@ -108,14 +109,12 @@ function TopBar({ projectName }: { projectName?: string }) {
   return (
     <div className="flex h-14 items-center justify-between border-b border-white/5 bg-[#0a0a0d] px-4">
       <div className="flex items-center gap-6">
-        <div className="flex items-center gap-2">
-          <div className="flex h-7 w-7 items-center justify-center rounded-md bg-gradient-to-br from-[#7c6cf6] to-[#4a3f8f] text-sm font-bold text-white">
-            BI
-          </div>
-          <span className="text-[15px] font-semibold tracking-tight text-white">
-          Buffalo Ide
+        <button type="button" onClick={() => navigate("/")} className="flex items-center gap-2 rounded-lg px-1 py-1 hover:bg-white/5">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#238636] text-lg">🦬</div>
+          <span className="text-[15px] font-semibold tracking-tight text-[#f0f6fc]">
+            Buffalo<span className="text-[#58a6ff]">IDE</span>
           </span>
-        </div>
+        </button>
 
         <div className="flex items-center gap-2 rounded-md px-2 py-1 text-sm text-white/90 hover:bg-white/5">
           <Folder size={15} className="text-amber-400" fill="currentColor" strokeWidth={0} />
@@ -146,7 +145,6 @@ function TopBar({ projectName }: { projectName?: string }) {
         >
           <Eye size={17} strokeWidth={1.8} />
         </button>
-        <div className="h-8 w-8 overflow-hidden rounded-full bg-gradient-to-br from-orange-300 to-rose-400 ring-1 ring-white/10" />
       </div>
     </div>
   );
@@ -177,7 +175,7 @@ function getNodeAppearance(node: ProjectTreeNode) {
   return { icon: FileCode2, color: "text-[#8a8a96]" };
 }
 
-function TreeNode({ node, level = 0, selectedId, onSelectFolder, onOpenFile, onOpenContextMenu }: { node: ProjectTreeNode; level?: number; selectedId: string | null; onSelectFolder: (id: string) => void; onOpenFile: (node: ProjectTreeNode) => void; onOpenContextMenu: (event: React.MouseEvent, parentId: string) => void }) {
+function TreeNode({ node, level = 0, selectedId, onSelectFolder, onOpenFile, onOpenContextMenu }: { node: ProjectTreeNode; level?: number; selectedId: string | null; onSelectFolder: (id: string) => void; onOpenFile: (node: ProjectTreeNode) => void; onOpenContextMenu: (event: React.MouseEvent, target: ProjectTreeNode) => void }) {
   const [expanded, setExpanded] = React.useState(true);
   const isFolder = node.type === "folder";
   const { icon: NodeIcon, color } = getNodeAppearance(node);
@@ -195,11 +193,9 @@ function TreeNode({ node, level = 0, selectedId, onSelectFolder, onOpenFile, onO
           }
         }}
         onContextMenu={(event) => {
-          if (isFolder) {
-            event.preventDefault();
-            onSelectFolder(node._id);
-            onOpenContextMenu(event, node._id);
-          }
+          event.preventDefault();
+          if (isFolder) onSelectFolder(node._id);
+          onOpenContextMenu(event, node);
         }}
         className={`flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-left text-sm text-white/90 hover:bg-white/5 ${selectedId === node._id ? "bg-[#7c6cf6]/20" : ""}`}
         style={{ paddingLeft: `${8 + level * 14}px` }}
@@ -222,9 +218,10 @@ function Explorer({ tree, isLoading, isError, projectName, projectId, onRefresh,
   const [selectedParentId, setSelectedParentId] = React.useState<string | null>(null);
   const [creating, setCreating] = React.useState<"file" | "folder" | null>(null);
   const [name, setName] = React.useState("");
-  const [contextMenu, setContextMenu] = React.useState<{ x: number; y: number; parentId: string | null } | null>(null);
+  const [contextMenu, setContextMenu] = React.useState<{ x: number; y: number; target: ProjectTreeNode | null } | null>(null);
   const [createFile, { isLoading: isCreatingFile }] = useCreatefileMutation();
   const [createFolder, { isLoading: isCreatingFolder }] = useCreatefolderMutation();
+  const [deleteFolder, { isLoading: isDeleting }] = useDeletefolderMutation();
   const { defaultProjectName, isExplorerExpanded, explorerVisible } = useAppSelector((s) => ({
     defaultProjectName: s.ide.projectName,
     isExplorerExpanded: s.ide.isExplorerExpanded,
@@ -251,9 +248,21 @@ function Explorer({ tree, isLoading, isError, projectName, projectId, onRefresh,
     setContextMenu(null);
   };
 
-  const openContextMenu = (event: React.MouseEvent, parentId: string | null) => {
+  const openContextMenu = (event: React.MouseEvent, target: ProjectTreeNode | null) => {
     event.preventDefault();
-    setContextMenu({ x: event.clientX, y: event.clientY, parentId });
+    setContextMenu({ x: event.clientX, y: event.clientY, target });
+  };
+
+  const getCreateParentId = () => contextMenu?.target?.type === "folder" ? contextMenu.target._id : selectedParentId;
+
+  const handleDelete = async () => {
+    const target = contextMenu?.target;
+    if (!target || isDeleting) return;
+    const confirmed = window.confirm(`Delete ${target.type} "${target.name}"${target.type === "folder" ? " and everything inside it" : ""}?`);
+    if (!confirmed) return;
+    await deleteFolder({ folderid: target._id, projectid: projectId }).unwrap();
+    setContextMenu(null);
+    onRefresh();
   };
 
   const handleCreate = async (event: React.FormEvent) => {
@@ -269,7 +278,7 @@ function Explorer({ tree, isLoading, isError, projectName, projectId, onRefresh,
   };
 
   return (
-    <div className="flex w-64 flex-col border-r border-white/5 bg-[#0e0e12]">
+    <div className="flex w-[min(16rem,42vw)] min-w-0 shrink-0 flex-col border-r border-white/5 bg-[#0e0e12]">
       <div className="flex items-center justify-between px-3 pt-4 pb-2">
         <span className="text-[11px] font-semibold tracking-widest text-[#8a8a96]">
           EXPLORER
@@ -345,14 +354,20 @@ function Explorer({ tree, isLoading, isError, projectName, projectId, onRefresh,
           style={{ left: contextMenu.x, top: contextMenu.y }}
           onClick={(event) => event.stopPropagation()}
         >
-          <button onClick={() => openCreateForm("file", contextMenu.parentId)} className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-xs text-white/90 hover:bg-white/10">
+          <button onClick={() => openCreateForm("file", getCreateParentId())} className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-xs text-white/90 hover:bg-white/10">
             <FilePlus size={14} />
             New file
           </button>
-          <button onClick={() => openCreateForm("folder", contextMenu.parentId)} className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-xs text-white/90 hover:bg-white/10">
+          <button onClick={() => openCreateForm("folder", getCreateParentId())} className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-xs text-white/90 hover:bg-white/10">
             <FolderPlus size={14} />
             New folder
           </button>
+          {contextMenu.target && (
+            <button onClick={handleDelete} disabled={isDeleting} className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-xs text-red-300 hover:bg-red-500/10 disabled:opacity-50">
+              <X size={14} />
+              {isDeleting ? "Deleting..." : `Delete ${contextMenu.target.type}`}
+            </button>
+          )}
         </div>
       )}
     </div>
@@ -376,8 +391,42 @@ function getEditorLanguage(fileName: string | null) {
   return languages[extension ?? ""] ?? "plaintext";
 }
 
-function TerminalPanel() {
+function flattenFiles(nodes: ProjectTreeNode[], files: ProjectTreeNode[] = []) {
+  nodes.forEach((node) => {
+    if (node.type === "file") files.push(node);
+    else flattenFiles(node.children, files);
+  });
+  return files;
+}
+
+function createPreviewDocument(tree: ProjectTreeNode[], activeFileName: string | null, activeFileContent: string) {
+  const files = flattenFiles(tree).map((file) => file.name === activeFileName ? { ...file, content: activeFileContent } : file);
+  const htmlFile = files.find((file) => file.name.toLowerCase() === "index.html") ?? files.find((file) => file.name.toLowerCase().endsWith(".html"));
+  if (!htmlFile) return null;
+
+  let document = htmlFile.content ?? "";
+  const styles = files.filter((file) => ["css", "scss"].includes(file.name.split(".").pop()?.toLowerCase() ?? ""));
+  const scripts = files.filter((file) => ["js", "jsx", "ts", "tsx"].includes(file.name.split(".").pop()?.toLowerCase() ?? ""));
+  const styleTag = styles.length ? `<style>\n${styles.map((file) => file.content ?? "").join("\n")}\n</style>` : "";
+  const scriptTag = scripts.length ? `<script type="module">\n${scripts.map((file) => file.content ?? "").join("\n")}\n</script>` : "";
+  if (/<\/head>/i.test(document)) document = document.replace(/<\/head>/i, `${styleTag}</head>`);
+  else document = `${styleTag}${document}`;
+  if (/<\/body>/i.test(document)) document = document.replace(/<\/body>/i, `${scriptTag}</body>`);
+  else document += scriptTag;
+  return document;
+}
+
+function PreviewPanel({ tree, activeFileName, activeFileContent }: { tree: ProjectTreeNode[]; activeFileName: string | null; activeFileContent: string }) {
+  const preview = createPreviewDocument(tree, activeFileName, activeFileContent);
+  if (!preview) {
+    return <div className="flex flex-1 items-center justify-center text-sm text-white/60">Open or create an index.html file to preview this project.</div>;
+  }
+  return <iframe title="Project preview" sandbox="allow-scripts" srcDoc={preview} className="h-full w-full border-0 bg-white" />;
+}
+
+function TerminalPanel({ projectId }: { projectId: string }) {
   const terminalRef = useRef<HTMLDivElement>(null);
+  const socketRef = useRef<WebSocket | null>(null);
 
   React.useEffect(() => {
     if (!terminalRef.current) return;
@@ -393,32 +442,42 @@ function TerminalPanel() {
     terminal.loadAddon(fitAddon);
     terminal.open(terminalRef.current);
     fitAddon.fit();
-    terminal.writeln("Buffalo terminal");
-    terminal.write("$ ");
+    terminal.writeln("Connecting to Buffalo terminal...");
 
     const input = terminal.onData((data) => {
-      if (data === "\r") {
-        terminal.write("\r\n$ ");
-      } else if (data === "\u007f") {
-        terminal.write("\b \b");
-      } else {
-        terminal.write(data);
+      const socket = socketRef.current;
+      if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: "input", data }));
+    });
+    const configuredUrl = import.meta.env.VITE_AI_WS_URL as string | undefined;
+    const socketUrl = configuredUrl ?? `${window.location.protocol === "https:" ? "wss" : "ws"}://${window.location.hostname}:8004/terminal`;
+    const socket = new WebSocket(`${socketUrl}?projectId=${encodeURIComponent(projectId)}`);
+    socketRef.current = socket;
+    socket.addEventListener("message", (event) => {
+      try {
+        const message = JSON.parse(event.data) as { type?: string; data?: string };
+        if (typeof message.data === "string") terminal.write(message.data);
+      } catch {
+        terminal.write("\r\nTerminal returned invalid data.\r\n");
       }
     });
+    socket.addEventListener("error", () => terminal.write("\r\nUnable to connect to terminal service.\r\n"));
+    socket.addEventListener("close", () => terminal.write("\r\nTerminal disconnected.\r\n"));
     const handleResize = () => fitAddon.fit();
     window.addEventListener("resize", handleResize);
 
     return () => {
       input.dispose();
+      socket.close();
+      socketRef.current = null;
       window.removeEventListener("resize", handleResize);
       terminal.dispose();
     };
-  }, []);
+  }, [projectId]);
 
   return <div ref={terminalRef} className="min-h-0 flex-1 overflow-hidden" />;
 }
 
-function EditorArea() {
+function EditorArea({ tree, projectId }: { tree: ProjectTreeNode[]; projectId: string }) {
   const dispatch = useAppDispatch();
   const { mainView, terminalOpen, activeFileId, activeFileName, activeFileContent } = useAppSelector((s) => ({
     mainView: s.ide.mainView,
@@ -451,10 +510,8 @@ function EditorArea() {
               />
             </div>
           </div>
-        ) : activeFileId && mainView === "preview" ? (
-          <div className="flex flex-1 items-center justify-center text-sm text-white/60">
-            Preview for {activeFileName}
-          </div>
+        ) : mainView === "preview" ? (
+          <PreviewPanel tree={tree} activeFileName={activeFileName} activeFileContent={activeFileContent} />
         ) : (
           <div className="flex flex-col items-center gap-3 text-center">
             <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[#17171d]/70 ring-1 ring-white/5">
@@ -486,29 +543,36 @@ function EditorArea() {
               Hide
             </button>
           </div>
-          <TerminalPanel />
+            <TerminalPanel projectId={projectId} />
         </div>
       )}
     </div>
   );
 }
 
-function ChatPanel() {
+function ChatPanel({ projectId, onRefresh }: { projectId: string; onRefresh: () => void }) {
   const dispatch = useAppDispatch();
   const { chatDraft, chatMessages, isAssistantThinking } = useAppSelector((s) => ({
     chatDraft: s.ide.chatDraft,
     chatMessages: s.ide.chatMessages,
     isAssistantThinking: s.ide.isAssistantThinking,
   }));
-  const timeoutRef = useRef<number | null>(null);
+  const [generateProject] = useGenerateProjectMutation();
 
-  const handleSend = () => {
+  const handleSend = async () => {
     const text = chatDraft.trim();
     if (!text) return;
     dispatch(sendChatMessage(text));
-    timeoutRef.current = window.setTimeout(() => {
-      dispatch(receiveAssistantMessage(`Got it — working on "${text}".`));
-    }, 900);
+    try {
+      const result = await generateProject({ prompt: text, projectId }).unwrap();
+      dispatch(receiveAssistantMessage(`Created ${result.payload?.files.length ?? 0} files for ${result.payload?.projectName ?? "your project"}.`));
+      onRefresh();
+    } catch (error) {
+      const message = typeof error === "object" && error !== null && "data" in error && typeof error.data === "object" && error.data !== null && "message" in error.data
+        ? String(error.data.message)
+        : "I could not create the project. Check the AI service configuration and try again.";
+      dispatch(receiveAssistantMessage(message));
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -519,7 +583,7 @@ function ChatPanel() {
   };
 
   return (
-    <div className="flex h-full min-h-0 w-[360px] min-w-[360px] shrink-0 flex-none flex-col overflow-hidden border-l border-white/5 bg-[#0e0e12]">
+    <div className="flex h-full min-h-0 w-[min(22.5rem,42vw)] min-w-0 shrink-0 flex-col overflow-hidden border-l border-white/5 bg-[#0e0e12]">
       <div className="border-b border-white/5 px-4 py-4">
         <h2 className="text-[15px] font-semibold text-white">Buffalo AI Chat</h2>
       </div>
@@ -634,13 +698,13 @@ function IdeLayout({ tree, isLoading, isError, projectName, projectId, onRefresh
     assistantVisible: s.ide.assistantVisible,
   }));
   return (
-    <div className="flex h-screen w-screen flex-col bg-[#0a0a0d] font-sans text-white">
+    <div className="flex h-dvh w-full min-w-0 flex-col bg-[#0a0a0d] font-sans text-white">
       <TopBar projectName={projectName} />
       <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
         <IconRail />
         {explorerVisible && <Explorer tree={tree} isLoading={isLoading} isError={isError} projectName={projectName} projectId={projectId} onRefresh={onRefresh} onOpenFile={onOpenFile} />}
-        <EditorArea />
-        {assistantVisible && <ChatPanel />}
+        <EditorArea tree={tree} projectId={projectId} />
+        {assistantVisible && <ChatPanel projectId={projectId} onRefresh={onRefresh} />}
       </div>
       <StatusBar />
     </div>
@@ -655,6 +719,10 @@ export default function Projectp() {
   const dispatch = useAppDispatch();
   const { id } = useParams<{ id: string }>();
   const { data, isLoading, isError, refetch } = useGettreeQuery(id ?? "", { skip: !id });
+
+  React.useLayoutEffect(() => {
+    dispatch(resetProjectWorkspace());
+  }, [dispatch, id]);
 
   return <IdeLayout tree={data?.tree ?? []} isLoading={isLoading} isError={isError || !id} projectName={data?.project.name} projectId={id ?? ""} onRefresh={refetch} onOpenFile={(node) => dispatch(openFile({ id: node._id, name: node.name, content: node.content }))} />;
 }

@@ -20,6 +20,7 @@ app.use(cookieParser())
 app.use("/api/v1/auth",proxy(process.env.AUTH_SERVICE_URL as string))
 app.use("/api/v1/user",authmid,proxywithheader(process.env.USER_SERVICE_URL as string))
 app.use("/api/v1/project",authmid,proxywithheader(process.env.PROJECT_SERVICE_URL as string))
+app.use("/api/v1/ai",authmid,proxywithheader(process.env.AI_SERVICE_URL as string))
 
 app.listen(Port,()=>{
     console.log("gateway listened")

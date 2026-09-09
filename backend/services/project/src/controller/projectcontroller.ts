@@ -1,5 +1,6 @@
-import { err, publishMessage, success, tryCatch } from "@buffalo/shared";
+import { err, success, tryCatch } from "@buffalo/shared";
 import { Project } from "../model/projectmodel.js";
+import { Folder } from "../model/foldermodel.js";
 
 const createproject=tryCatch(async(req , res)=>{
 const {name,description }=req.body
@@ -47,13 +48,15 @@ const getallproject=tryCatch(async(req , res)=>{
 const deleteproject=tryCatch(async(req , res)=>{
 
     const {projectid}=req.body
+    const owner=req.headers["id"]
     if(!projectid)return err(res,"Pls provide projectid")
-        const projects=await Project.findByIdAndDelete(projectid)
+    if(!owner)return err(res,"Not authenticated")
+        const projects=await Project.findOneAndDelete({_id:projectid,owner:owner.toString()})
     if(!projects){
-        return err(res,"Something went wrong")
+        return err(res,"Project not found")
     }
 
-    await publishMessage("delex","exdel",{folders:projects?.folders})
+    await Folder.deleteMany({projectid:projects._id})
     return success(res,"Project delete successfully")
 })
 

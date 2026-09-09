@@ -17,6 +17,13 @@ export const userApi = createApi({
 
     }),
 
+    logout: builder.mutation<{ success: boolean; message: string }, void>({
+      query: () => ({
+        url: "api/v1/auth/logout",
+        method: "POST",
+      }),
+    }),
+
     getprofile: builder.query({
       query: () => ({
         url: "api/v1/user/getprofile",
@@ -34,6 +41,6 @@ export const userApi = createApi({
   }),
 })
 
-export const { useLoginMutation,useGetprofileQuery} = userApi
+export const { useLoginMutation,useLogoutMutation,useGetprofileQuery} = userApi
 
 export default userApi

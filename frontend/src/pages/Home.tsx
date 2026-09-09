@@ -10,6 +10,7 @@ import {
   Zap,
   X,
   Trash2,
+  LogOut,
 } from "lucide-react";
 import {
   useCreateprojectMutation,
@@ -17,7 +18,10 @@ import {
   useGetallprojectQuery,
   useTogglestarMutation,
 } from "../store/Projectapi";
-import { useAppSelector } from "../utils/Hooks";
+import { useLogoutMutation, userApi } from "../store/Userapi";
+import { useAppDispatch, useAppSelector } from "../utils/Hooks";
+import { resetProjectWorkspace } from "../store/Projectslice";
+import { setUser } from "../store/Userslice";
 import { useNavigate } from "react-router-dom";
 
 /* ---------- Project data & types ---------- */
@@ -34,12 +38,14 @@ type ProjectView = "all" | "starred";
 /* ---------- Small sidebar pieces ---------- */
 
 function Logo() {
+  const navigate = useNavigate();
   return (
-    <div className="hidden items-center gap-2 px-1 sm:flex">
-      <span className="text-lg font-bold tracking-tight text-white">
-        BUFFALOIDE
+    <button type="button" onClick={() => navigate("/")} className="hidden items-center gap-3 px-1 sm:flex">
+      <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#238636] text-lg">🦬</span>
+      <span className="text-lg font-semibold text-[#f0f6fc]">
+        Buffalo<span className="text-[#58a6ff]">IDE</span>
       </span>
-    </div>
+    </button>
   );
 }
 
@@ -133,10 +139,10 @@ function Sidebar({ view, onViewChange }: SidebarProps) {
           MAIN
         </p>
         <nav className="mt-10 flex flex-col gap-1 sm:mt-0">
-          <div onClick={() => onViewChange("all")}>
+          <div className="cursor-pointer" onClick={() => onViewChange("all")}>
             <NavItem icon={<Folder className="h-4 w-4" />} label="Projects" active={view === "all"} />
           </div>
-          <div onClick={() => onViewChange("starred")}>
+          <div className="cursor-pointer" onClick={() => onViewChange("starred")}>
             <NavItem icon={<Star className="h-4 w-4" />} active={view === "starred"} label="Starred" />
           </div>
         </nav>
@@ -153,13 +159,29 @@ function Sidebar({ view, onViewChange }: SidebarProps) {
 /* ---------- Right panel pieces (~70%) ---------- */
 
 function TopBar() {
- const {name}=useAppSelector(state=>state.user)
+ const dispatch = useAppDispatch();
+ const navigate = useNavigate();
+ const [logout, { isLoading: isLoggingOut }] = useLogoutMutation();
+ const {name, email}=useAppSelector(state=>state.user)
  const initials = name
   ?.trim()
   .split(/\s+/)
+  .filter(Boolean)
+  .slice(0, 2)
   .map((word) => word[0])
   .join("")
-  .toUpperCase();
+  .toUpperCase() || email.slice(0, 2).toUpperCase() || "U";
+
+ const handleLogout = async () => {
+   try {
+     await logout().unwrap();
+
+   } finally {
+     dispatch(setUser({ name: "", email: "", avatar: "", isauth: false }));
+     dispatch(userApi.util.resetApiState());
+     navigate("/login");
+   }
+ };
   return (
     <div className="flex items-center justify-end gap-2 border-b border-neutral-800 px-4 py-4 sm:gap-4 sm:px-8">
       <button
@@ -179,6 +201,15 @@ function TopBar() {
          {name}
         </span>
         <ChevronDown className="hidden h-4 w-4 text-neutral-500 sm:inline" />
+      </button>
+      <button
+        type="button"
+        onClick={handleLogout}
+        disabled={isLoggingOut}
+        title="Log out"
+        className="cursor-pointer rounded-md p-2 text-neutral-400 hover:bg-red-500/10 hover:text-red-400 disabled:opacity-50"
+      >
+        <LogOut className="h-4 w-4" />
       </button>
     </div>
   );
@@ -256,7 +287,7 @@ function ProjectCard({
 }: ProjectCardProps) {
   const navigate=useNavigate()
   return (
-    <div className="hover:cursor-pointer flex flex-col rounded-xl border border-neutral-800 bg-neutral-900 p-5 transition-colors hover:border-neutral-700" onClick={()=>navigate(`project/${project.id}`)}>
+    <div className="cursor-pointer flex flex-col rounded-xl border border-neutral-800 bg-neutral-900 p-5 transition-colors hover:border-neutral-700" onClick={()=>navigate(`project/${project.id}`)}>
       <div className="flex items-start justify-between gap-3">
         <h3 className="truncate text-base font-semibold text-white">
           {project.name}
@@ -264,7 +295,7 @@ function ProjectCard({
         <button
           type="button"
           aria-label="Toggle starred"
-          onClick={() => onToggleStar(project)}
+          onClick={(event) => { event.stopPropagation(); onToggleStar(project); }}
           className="shrink-0 cursor-pointer rounded-md p-1 hover:bg-neutral-800"
         >
           <Star
@@ -285,7 +316,7 @@ function ProjectCard({
         <button
           type="button"
           aria-label="Delete project"
-          onClick={() => onDeleteProject(project)}
+          onClick={(event) => { event.stopPropagation(); onDeleteProject(project); }}
           className="cursor-pointer rounded-md p-1.5 text-neutral-500 hover:bg-neutral-800 hover:text-red-400"
         >
           <Trash2 className="h-4 w-4" />
@@ -307,7 +338,7 @@ function ProjectGrid({
   onDeleteProject,
 }: ProjectGridProps) {
   return (
-    <div className="max-h-[32rem] overflow-y-auto pr-1">
+    <div className="max-h-[min(32rem,calc(100dvh-15rem))] overflow-y-auto pr-1">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {projects.map((project) => (
           <ProjectCard
@@ -330,6 +361,7 @@ interface RecentProjectsProps {
 function RecentProjects({ onCreateClick, view }: RecentProjectsProps) {
 
   const { data } = useGetallprojectQuery();
+  const dispatch = useAppDispatch();
   const [toggleStar] = useTogglestarMutation();
   const [deleteProject] = useDeleteprojectMutation();
   const allProjects: Project[] = (data?.payload ?? []).map((project) => ({
@@ -347,6 +379,7 @@ function RecentProjects({ onCreateClick, view }: RecentProjectsProps) {
   };
 
   const handleDeleteProject = async (project: Project) => {
+    dispatch(resetProjectWorkspace());
     await deleteProject({ projectid: project.id }).unwrap();
   };
 
@@ -494,7 +527,7 @@ export default function Home() {
   const [view, setView] = useState<ProjectView>("all");
 
   return (
-    <div className="flex h-screen w-full overflow-hidden bg-neutral-950">
+    <div className="flex h-dvh w-full min-w-0 overflow-hidden bg-neutral-950">
       <Sidebar view={view} onViewChange={setView} />
       <main className="flex flex-1 flex-col overflow-y-auto">
         <TopBar />
