@@ -1,38 +1,6 @@
 <div align="center">
 
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 100" width="400" height="100" role="img" aria-label="Buffalo IDE">
-  <defs>
-    <linearGradient id="horn" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#6366F1"/>
-      <stop offset="1" stop-color="#8B5CF6"/>
-    </linearGradient>
-    <linearGradient id="spark" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#FDE68A"/>
-      <stop offset="1" stop-color="#F59E0B"/>
-    </linearGradient>
-  </defs>
-
-  <!-- Buffalo horns -->
-  <path d="M12 30 C12 52 26 62 40 62 L40 52 C32 52 24 46 22 30 Z" fill="url(#horn)"/>
-  <path d="M88 30 C88 52 74 62 60 62 L60 52 C68 52 76 46 78 30 Z" fill="url(#horn)"/>
-
-  <!-- Head -->
-  <rect x="34" y="40" width="32" height="46" rx="12" fill="url(#horn)"/>
-
-  <!-- Code brackets on head -->
-  <g stroke="#FFFFFF" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" fill="none">
-    <polyline points="46,55 40,63 46,71"/>
-    <polyline points="54,55 60,63 54,71"/>
-  </g>
-
-  <!-- AI spark -->
-  <path d="M50 8 L53 17 L62 20 L53 23 L50 32 L47 23 L38 20 L47 17 Z" fill="url(#spark)"/>
-
-  <!-- Wordmark -->
-  <text x="110" y="62" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="44" font-weight="700" fill="#4F46E5" letter-spacing="1">Buffalo</text>
-  <text x="298" y="62" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="44" font-weight="300" fill="#F59E0B" letter-spacing="1">IDE</text>
-  <text x="112" y="84" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="500" fill="#8B5CF6" letter-spacing="3">CODE AT FULL STRENGTH</text>
-</svg>
+<img src="assets/logo.svg" alt="Buffalo IDE logo" width="360" />
 
 # Buffalo IDE
 
@@ -42,7 +10,7 @@ An AI-powered IDE that generates code from natural language, built with React, E
 
 <br />
 
-![Status](https://img.shields.io/badge/status-currently%20in%20development-F59E0B?style=for-the-badge)
+![Status](https://img.shields.io/badge/status-ready%20to%20deploy-10B981?style=for-the-badge)
 
 <br />
 
@@ -59,13 +27,12 @@ An AI-powered IDE that generates code from natural language, built with React, E
 ![LangChain](https://img.shields.io/badge/LangChain-1C3C3C?style=flat-square&logo=langchain&logoColor=white)
 ![LangGraph](https://img.shields.io/badge/LangGraph-1C3C3C?style=flat-square)
 
-
 </div>
 
 ---
 
-> [!NOTE]
-> 🚧 **Currently in Development.** Buffalo IDE is under active development. Features, APIs, and architecture may change, and the project is not yet production-ready.
+> [!TIP]
+> 🚀 **Ready to Deploy.** Buffalo IDE is feature-complete for its initial release. See [Deployment](#-deployment) to get it running.
 
 ## 📖 About
 
@@ -75,16 +42,15 @@ It pairs a React frontend with an Express backend organized as microservices, co
 
 ## ✨ Features
 
-| Feature | Description | Status |
-| --- | --- | --- |
-| 🤖 **AI code generation** | Generate new code from natural language prompts | 🚧 In development |
-| 🧠 **Agent workflows** | Multi-step AI workflows built with LangChain and LangGraph | 🚧 In development |
-| ⚡ **Real-time communication** | Live updates between the IDE and backend over WebSockets | 🚧 In development |
-| 🧩 **Microservice backend** | Message-driven Express services communicating via RabbitMQ | 🚧 In development |
-| ☁️ **Media uploads** | Asset and media handling through Cloudinary | 🚧 In development |
-| 🔐 **Sessions and caching** | Redis-backed sessions and fast data access | 🚧 In development |
+| Feature | Description |
+| --- | --- |
+| 🤖 **AI code generation** | Generate new code from natural language prompts |
+| 🧠 **Agent workflows** | Multi-step AI workflows built with LangChain and LangGraph |
+| 🧩 **Microservice backend** | Message-driven Express services communicating via RabbitMQ |
+| ☁️ **Media uploads** | Asset and media handling through Cloudinary |
+| 🔐 **Sessions and caching** | Redis-backed sessions and fast data access |
 
-<!-- VERIFY: update each status to ✅ Available as features are completed, and add features that actually exist (editor, file tree, projects, etc.). -->
+<!-- VERIFY: add features that actually exist (editor, file tree, projects, etc.) and remove any that don't. -->
 
 ## 🧰 Tech Stack
 
@@ -110,7 +76,6 @@ flowchart LR
         Auth["Auth Service"]
         Project["Project Service"]
         AISvc["AI Service"]
-        RT["Real-time Service"]
     end
 
     subgraph AIStack["AI Layer"]
@@ -125,13 +90,11 @@ flowchart LR
     Cloud["Cloudinary"]
 
     Client -->|"HTTP"| Gateway
-    Client <-->|"WebSockets"| RT
     Gateway --> Redis
     Gateway --> MQ
     MQ <--> Auth
     MQ <--> Project
     MQ <--> AISvc
-    MQ <--> RT
 
     Auth --> Mongo
     Project --> Mongo
@@ -142,7 +105,7 @@ flowchart LR
     LG --> LLM
 ```
 
-<!-- VERIFY: service names, which services use Mongo/Redis/Cloudinary, and the WebSocket host service are inferred. Adjust to match the actual code. -->
+<!-- VERIFY: service names and which services use Mongo/Redis/Cloudinary are inferred. Adjust to match the actual code. -->
 
 ## 📁 Project Structure
 
@@ -175,9 +138,9 @@ npm install
 
 <!-- VERIFY: document the real environment files and variables (e.g. from .env.example). None are listed here to avoid inaccuracies. -->
 
-Create the required environment files for MongoDB, Redis, RabbitMQ, Cloudinary, and your LLM provider as described in the repository's example env files.
+Create the required environment files for MongoDB, Redis, RabbitMQ, Cloudinary, and your LLM provider as described in the repository's example env files. Never commit secrets.
 
-### Run
+### Run locally
 
 ```bash
 # Start infrastructure (verify the Compose file path and service names)
@@ -189,17 +152,29 @@ npm run <script> --workspace=<workspace-name>
 
 <!-- VERIFY: replace with the exact scripts defined in each workspace's package.json. -->
 
+## 🚢 Deployment
+
+1. Provision MongoDB, Redis, and RabbitMQ (managed services or containers).
+2. Set production environment variables for every service, including Cloudinary and your LLM provider keys.
+3. Build and start the stack:
+
+```bash
+npm run build
+docker compose up -d --build
+```
+
+<!-- VERIFY: confirm the root build script, the production Compose file name (e.g. -f docker-compose.prod.yml), and the host/platform you deploy to. -->
+
 ## 🗺️ Roadmap
 
-- [ ] 🤖 AI code generation from natural language
-- [ ] 🧠 LangGraph agent workflows
-- [ ] ⚡ Real-time communication over WebSockets
-- [ ] 🧩 Core microservices and message-driven communication
-- [ ] ☁️ Cloudinary media uploads
-- [ ] 🧪 Testing and CI/CD
-- [ ] 🚢 Production deployment
+- [x] 🤖 AI code generation from natural language
+- [x] 🧠 LangGraph agent workflows
+- [x] 🧩 Core microservices and message-driven communication
+- [x] ☁️ Cloudinary media uploads
+- [ ] 🧪 Expanded testing and CI/CD
+- [ ] 📈 Monitoring and observability
 
-<!-- VERIFY: tick items that are complete and add or remove items to match your plans. -->
+<!-- VERIFY: adjust checkmarks and planned items to match reality. -->
 
 ## 📄 License
 
