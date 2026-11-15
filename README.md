@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="assets/logo.svg" alt="Buffalo IDE logo" width="360" />
+
 
 # Buffalo IDE
 
